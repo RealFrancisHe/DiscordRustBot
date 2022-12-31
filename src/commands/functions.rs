@@ -5,11 +5,12 @@ use serenity::client::bridge::gateway::ShardManager;
 use serenity::framework::standard::{Args, HelpOptions, CommandGroup, CommandResult, help_commands, DispatchError};
 use serenity::framework::standard::macros::{help, hook};
 use serenity::model::gateway::Ready;
-use serenity::model::prelude::UserId;
+use serenity::model::prelude::{UserId, ResumedEvent};
 use serenity::prelude::TypeMapKey;
 use serenity::utils::MessageBuilder;
 use serenity::{async_trait, prelude::{EventHandler, Context}, model::prelude::Message};
 use tokio::sync::Mutex;
+use tracing::info;
 
 pub struct ShardManagerContainer;
 
@@ -66,7 +67,11 @@ impl EventHandler for Handler {
     }
 
     async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name)
+        info!("{} is connected!", ready.user.name)
+    }
+
+    async fn resume(&self, _: Context, _: ResumedEvent) {
+        info!("Resumed");
     }
 }
 

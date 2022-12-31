@@ -9,6 +9,8 @@ edition = "2021"
 dotenv = "0.15.0"
 env = "0.0.0"
 tokio = { version = "1.21.2", features = ["full"] }
+tracing = "0.1.23"
+tracing-subscriber = "0.3.16"
 
 [dependencies.serenity]
 git = "https://github.com/serenity-rs/serenity.git"

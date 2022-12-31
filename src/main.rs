@@ -1,15 +1,23 @@
 use std::{collections::{HashSet, HashMap}, sync::Arc};
 use std::fmt::Write;
-use functions::*;
 use serenity::{prelude::{GatewayIntents, Context}, Client, http::Http, framework::{StandardFramework, standard::{buckets::{LimitedFor, RevertBucket}, macros::{group, command, check}, CommandResult, Args, CommandOptions, Reason}}, model::{prelude::{Message, Channel}, Permissions}, utils::{ContentSafeOptions, content_safe}};
 use dotenv::dotenv;
 use serenity::client::bridge::gateway::ShardId;
+use crate::commands::functions::*;
+use crate::commands::math::*;
+use crate::commands::emoji::*;
 
-mod functions;
+mod commands;
 
 #[group]
-#[commands(about, am_i_admin, say, commands, ping, latency, some_long_command, upper_command)]
+#[commands(about, am_i_admin, say, commands, multiply, ping, latency, some_long_command, upper_command)]
 struct General;
+
+
+#[group]
+#[prefix = "math"]
+#[commands(multiply)]
+struct Math;
 
 #[group]
 #[prefixes("emoji", "em")] // multiple prefiexs (same thing)
@@ -18,11 +26,6 @@ struct General;
 #[default_command(bird)]
 #[commands(cat, dog)]
 struct Emoji;
-
-#[group]
-#[prefix = "math"]
-#[commands(multiply)]
-struct Math;
 
 #[group]
 #[owners_only]
@@ -34,8 +37,13 @@ struct Owner;
 #[tokio::main]
 async fn main() {
     dotenv().ok();
+    
+    // Tracing
+    tracing_subscriber::fmt::init();
+
     // Configuration
     let token = std::env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+
 
     let http = Http::new(&token);
 
@@ -49,7 +57,7 @@ async fn main() {
             }
             match http.get_current_user().await {
                 Ok(bot_id) => (owners, bot_id.id),
-                Err(why) => panic!("Not bot id {:?}", why),
+                Err(why) => panic!("No bot id {:?}", why),
             }
         },
         Err(why) => panic!("No App info {:?}", why),
@@ -60,7 +68,7 @@ async fn main() {
                     .with_whitespace(true)
                     .on_mention(Some(bot_id))
                     .prefix("~")
-                    .delimiters(vec![", ", ","])
+                    .delimiters(vec![" ", " "]) // include space
                     .owners(owners))
         .before(before)
         .after(after)
@@ -74,8 +82,8 @@ async fn main() {
             .delay_action(delay_action)).await
         .help(&MY_HELP)
         .group(&GENERAL_GROUP)
-        .group(&EMOJI_GROUP)
         .group(&MATH_GROUP)
+        .group(&EMOJI_GROUP)
         .group(&OWNER_GROUP);
 
     // the monitored resources
@@ -93,8 +101,15 @@ async fn main() {
         data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
     }
     
+    let shard_manager = client.shard_manager.clone();
+
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.expect("Could not register ctrl+c handler");
+        shard_manager.lock().await.shutdown_all().await;
+    });
+
     // listener
-    if let Err(why) = client.start_shards(2).await {
+    if let Err(why) = client.start().await {
         println!("Client error: {:?}", why);
     }
 }
@@ -192,19 +207,6 @@ async fn about_roles(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
 }
 
 #[command]
-#[aliases("*")] // Allows for ~math * as well as ~math multiply
-async fn multiply(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let first = args.single::<f64>()?;
-    let second = args.single::<f64>()?;
-
-    let res = first * second;
-
-    msg.channel_id.say(&ctx.http, &res.to_string()).await?;
-
-    Ok(())
-}
-
-#[command]
 async fn about(ctx: &Context, msg: &Message) -> CommandResult {
     msg.channel_id.say(&ctx.http, "This is Masterawes's bot! :)").await?;
 
@@ -248,41 +250,6 @@ async fn latency(ctx: &Context, msg: &Message) -> CommandResult {
 #[checks(Owner)]
 async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
     msg.channel_id.say(&ctx.http, "Pong!").await?;
-
-    Ok(())
-}
-
-#[command]
-#[aliases("kitten")]
-#[description = "Sends a cat emoji."]
-#[bucket = "emoji"]
-#[required_permissions("ADMINISTRATOR")]
-async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.channel_id.say(&ctx.http, ":cat:").await?;
-
-    // Return one ticket to bucket
-    Err(RevertBucket.into())
-}
-
-#[command]
-#[aliases("woof")]
-#[description = "Sends a dog emoji."]
-#[bucket = "emoji"]
-async fn dog(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.channel_id.say(&ctx.http, ":cat:").await?;
-
-    Ok(())
-}
-
-#[command]
-async fn bird(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let say_content = if args.is_empty() {
-        ":bird: can find the animals.".to_string()
-    } else {
-        format!(":bird: could not find animal named: `{}`.", args.rest())
-    };
-
-    msg.channel_id.say(&ctx.http, say_content).await?;
 
     Ok(())
 }
