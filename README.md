@@ -4,6 +4,6 @@
 
 ## Upcoming Features:
 
-#### `~wakeup` : Shuffles a user to wake them up
+#### 1. `~wakeup` : Shuffles a user to wake them up
 
-#### Possible TFT idea/connection
+#### 2. Possible TFT idea/connection
