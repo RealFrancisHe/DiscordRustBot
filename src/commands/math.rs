@@ -1,4 +1,8 @@
-use serenity::{framework::standard::{macros::{group, command}, CommandResult, Args}, prelude::Context, model::prelude::Message};
+use serenity::{
+    framework::standard::{macros::command, Args, CommandResult},
+    model::prelude::Message,
+    prelude::Context,
+};
 
 #[command]
 #[aliases("*")] // Allows for ~math * as well as ~math multiply

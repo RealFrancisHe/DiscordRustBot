@@ -1,18 +1,48 @@
-use std::{collections::{HashSet, HashMap}, sync::Arc};
-use std::fmt::Write;
-use serenity::{prelude::{GatewayIntents, Context}, Client, http::Http, framework::{StandardFramework, standard::{buckets::{LimitedFor, RevertBucket}, macros::{group, command, check}, CommandResult, Args, CommandOptions, Reason}}, model::{prelude::{Message, Channel}, Permissions}, utils::{ContentSafeOptions, content_safe}};
-use dotenv::dotenv;
-use serenity::client::bridge::gateway::ShardId;
+use crate::commands::emoji::*;
 use crate::commands::functions::*;
 use crate::commands::math::*;
-use crate::commands::emoji::*;
+use crate::commands::owner::*;
+use dotenv::dotenv;
+use serenity::client::bridge::gateway::ShardId;
+use serenity::{
+    framework::{
+        standard::{
+            buckets::LimitedFor,
+            macros::{check, command, group},
+            Args, CommandOptions, CommandResult, Reason,
+        },
+        StandardFramework,
+    },
+    http::Http,
+    model::{
+        prelude::{Channel, Message},
+        Permissions,
+    },
+    prelude::{Context, GatewayIntents},
+    utils::{content_safe, ContentSafeOptions},
+    Client,
+};
+use std::fmt::Write;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 mod commands;
 
 #[group]
-#[commands(about, am_i_admin, say, commands, multiply, ping, latency, some_long_command, upper_command)]
+#[commands(
+    about,
+    am_i_admin,
+    say,
+    commands,
+    multiply,
+    ping,
+    latency,
+    about_roles,
+    wakeup
+)]
 struct General;
-
 
 #[group]
 #[prefix = "math"]
@@ -30,20 +60,19 @@ struct Emoji;
 #[group]
 #[owners_only]
 #[only_in(guilds)]
-#[summary = "Server Owner Commands"]
+// #[summary = "Server Owner Commands"]
 #[commands(slow_mode)]
 struct Owner;
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    
+
     // Tracing
-    tracing_subscriber::fmt::init();
+    // tracing_subscriber::fmt::init();
 
     // Configuration
     let token = std::env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-
 
     let http = Http::new(&token);
 
@@ -59,27 +88,34 @@ async fn main() {
                 Ok(bot_id) => (owners, bot_id.id),
                 Err(why) => panic!("No bot id {:?}", why),
             }
-        },
+        }
         Err(why) => panic!("No App info {:?}", why),
     };
 
     let framework = StandardFramework::new()
-        .configure(|c| c
-                    .with_whitespace(true)
-                    .on_mention(Some(bot_id))
-                    .prefix("~")
-                    .delimiters(vec![" ", " "]) // include space
-                    .owners(owners))
+        .configure(|c| {
+            c.with_whitespace(true)
+                .on_mention(Some(bot_id))
+                .prefix("/")
+                .delimiters(vec![" ", " "]) // include space
+                .owners(owners)
+        })
         .before(before)
         .after(after)
         .unrecognised_command(unknown_command)
-        .normal_message(normal_message)
+        // .normal_message(normal_message)
         .on_dispatch_error(dispatch_error)
-        .bucket("emoji", |b| b.delay(3)).await
-        .bucket("complicated", |b| b.limit(2).time_span(30).delay(3)
-            .limit_for(LimitedFor::Channel)
-            .await_ratelimits(1)
-            .delay_action(delay_action)).await
+        .bucket("emoji", |b| b.delay(3))
+        .await
+        .bucket("complicated", |b| {
+            b.limit(2)
+                .time_span(30)
+                .delay(3)
+                .limit_for(LimitedFor::Channel)
+                .await_ratelimits(1)
+                .delay_action(delay_action)
+        })
+        .await
         .help(&MY_HELP)
         .group(&GENERAL_GROUP)
         .group(&MATH_GROUP)
@@ -100,11 +136,13 @@ async fn main() {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
     }
-    
+
     let shard_manager = client.shard_manager.clone();
 
     tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.expect("Could not register ctrl+c handler");
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Could not register ctrl+c handler");
         shard_manager.lock().await.shutdown_all().await;
     });
 
@@ -122,7 +160,9 @@ async fn commands(ctx: &Context, msg: &Message) -> CommandResult {
     let mut contents = "Commands used:\n".to_string();
 
     let data = ctx.data.read().await;
-    let counter = data.get::<CommandCounter>().expect("Expected CommandCounter in TypeMap.");
+    let counter = data
+        .get::<CommandCounter>()
+        .expect("Expected CommandCounter in TypeMap.");
 
     for (k, v) in counter {
         writeln!(contents, "- {name}: {amount}", name = k, amount = v)?;
@@ -143,7 +183,9 @@ async fn say(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                     .clean_channel(false)
                     .display_as_member_from(guild_id)
             } else {
-                ContentSafeOptions::default().clean_channel(false).clean_role(false)
+                ContentSafeOptions::default()
+                    .clean_channel(false)
+                    .clean_role(false)
             };
 
             let content = content_safe(&ctx.cache, x, &settings, &msg.mentions);
@@ -151,11 +193,12 @@ async fn say(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             msg.channel_id.say(&ctx.http, &content).await?;
 
             return Ok(());
-        },
+        }
         Err(_) => {
-            msg.reply(ctx, "An argument is require to run this command.").await?;
+            msg.reply(ctx, "An argument is require to run this command.")
+                .await?;
             return Ok(());
-        },
+        }
     };
 }
 
@@ -168,7 +211,10 @@ async fn owner_check(
     _: &mut Args,
     _: &CommandOptions,
 ) -> Result<(), Reason> {
-    let id = std::env::var("ID").expect("Expected an ID in the environment").parse::<u64>().expect("ID is not parseable as i32");
+    let id = std::env::var("ID")
+        .expect("Expected an ID in the environment")
+        .parse::<u64>()
+        .expect("ID is not parseable as i32");
     if msg.author.id != id {
         return Err(Reason::User("Lacked owner permission".to_string()));
     }
@@ -178,19 +224,24 @@ async fn owner_check(
 
 #[command]
 async fn some_long_command(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    msg.channel_id.say(&ctx.http, &format!("Arguments: {:?}", args.rest())).await?;
+    msg.channel_id
+        .say(&ctx.http, &format!("Arguments: {:?}", args.rest()))
+        .await?;
 
     Ok(())
 }
 
 #[command]
-#[allowed_roles("waaah wheres my higher role")]
+// #[allowed_roles("waaah wheres my higher role")]
 async fn about_roles(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let potential_role_name = args.rest();
 
     if let Some(guild) = msg.guild(&ctx.cache) {
         if let Some(role) = guild.role_by_name(potential_role_name) {
-            if let Err(why) = msg.channel_id.say(&ctx.http, &format!("Role-ID: {}", role.id)).await
+            if let Err(why) = msg
+                .channel_id
+                .say(&ctx.http, &format!("Role-ID: {}", role.id))
+                .await
             {
                 println!("Error sending message: {:?}", why);
             }
@@ -200,7 +251,10 @@ async fn about_roles(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
     }
 
     msg.channel_id
-        .say(&ctx.http, format!("Could not find role named: {:?}", potential_role_name))
+        .say(
+            &ctx.http,
+            format!("Could not find role named: {:?}", potential_role_name),
+        )
         .await?;
 
     Ok(())
@@ -208,7 +262,9 @@ async fn about_roles(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
 
 #[command]
 async fn about(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.channel_id.say(&ctx.http, "This is Masterawes's bot! :)").await?;
+    msg.channel_id
+        .say(&ctx.http, "This is Masterawes's bot! :)")
+        .await?;
 
     Ok(())
 }
@@ -221,10 +277,11 @@ async fn latency(ctx: &Context, msg: &Message) -> CommandResult {
     let shard_manager = match data.get::<ShardManagerContainer>() {
         Some(v) => v,
         None => {
-            msg.reply(ctx, "There was a problem getting the shard manager").await?;
+            msg.reply(ctx, "There was a problem getting the shard manager")
+                .await?;
 
             return Ok(());
-        },
+        }
     };
 
     let manager = shard_manager.lock().await;
@@ -236,11 +293,12 @@ async fn latency(ctx: &Context, msg: &Message) -> CommandResult {
         None => {
             msg.reply(ctx, "No shard found").await?;
 
-            return Ok(())
-        },
+            return Ok(());
+        }
     };
 
-    msg.reply(ctx, &format!("The shard latency is {:?}", runner.latency)).await?;
+    msg.reply(ctx, &format!("The shard latency is {:?}", runner.latency))
+        .await?;
 
     Ok(())
 }
@@ -262,14 +320,18 @@ async fn am_i_admin(ctx: &Context, msg: &Message, _args: Args) -> CommandResult 
                 .to_role_cached(&ctx.cache)
                 .map_or(false, |r| r.has_permission(Permissions::ADMINISTRATOR))
             {
-                msg.channel_id.say(&ctx.http, "Yes, you are an admin.").await?;
+                msg.channel_id
+                    .say(&ctx.http, "Yes, you are an admin.")
+                    .await?;
 
-                return Ok(())
+                return Ok(());
             }
         }
     }
 
-    msg.channel_id.say(&ctx.http, "No, you are not an admin.").await?;
+    msg.channel_id
+        .say(&ctx.http, "No, you are not an admin.")
+        .await?;
 
     Ok(())
 }
@@ -277,14 +339,22 @@ async fn am_i_admin(ctx: &Context, msg: &Message, _args: Args) -> CommandResult 
 #[command]
 async fn slow_mode(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let say_content = if let Ok(slow_mode_rate_seconds) = args.single::<u64>() {
-        if let Err(why) = 
-            msg.channel_id.edit(&ctx.http, |c| c.rate_limit_per_user(slow_mode_rate_seconds)).await
+        if let Err(why) = msg
+            .channel_id
+            .edit(&ctx.http, |c| c.rate_limit_per_user(slow_mode_rate_seconds))
+            .await
         {
             println!("Error setting channel's slow mode rate: {:?}", why);
 
-            format!("Failed to set slow mode to `{}` seconds.", slow_mode_rate_seconds)
+            format!(
+                "Failed to set slow mode to `{}` seconds.",
+                slow_mode_rate_seconds
+            )
         } else {
-            format!("Successfully set slow mode rate to `{}` seconds.", slow_mode_rate_seconds)
+            format!(
+                "Successfully set slow mode rate to `{}` seconds.",
+                slow_mode_rate_seconds
+            )
         }
     } else if let Some(Channel::Guild(channel)) = msg.channel_id.to_channel_cached(&ctx.cache) {
         let slow_mode_rate = channel.rate_limit_per_user.unwrap_or(0);
@@ -298,7 +368,7 @@ async fn slow_mode(ctx: &Context, msg: &Message, mut args: Args) -> CommandResul
     Ok(())
 }
 
-// Sub-commands 
+// Sub-commands
 #[command("upper")]
 #[sub_commands(sub)]
 async fn upper_command(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {

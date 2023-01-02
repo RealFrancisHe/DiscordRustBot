@@ -2,13 +2,19 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serenity::client::bridge::gateway::ShardManager;
-use serenity::framework::standard::{Args, HelpOptions, CommandGroup, CommandResult, help_commands, DispatchError};
 use serenity::framework::standard::macros::{help, hook};
+use serenity::framework::standard::{
+    help_commands, Args, CommandGroup, CommandResult, DispatchError, HelpOptions,
+};
 use serenity::model::gateway::Ready;
-use serenity::model::prelude::{UserId, ResumedEvent};
+use serenity::model::prelude::{ResumedEvent, UserId};
 use serenity::prelude::TypeMapKey;
 use serenity::utils::MessageBuilder;
-use serenity::{async_trait, prelude::{EventHandler, Context}, model::prelude::Message};
+use serenity::{
+    async_trait,
+    model::prelude::Message,
+    prelude::{Context, EventHandler},
+};
 use tokio::sync::Mutex;
 use tracing::info;
 
@@ -29,15 +35,14 @@ pub struct Handler;
 impl EventHandler for Handler {
     // handles events
 
-    async fn message(&self, ctx: Context, msg: Message ) {
+    async fn message(&self, ctx: Context, msg: Message) {
         let body = msg.content;
         if &body == "!ping" {
             if let Err(failure) = msg.channel_id.say(&ctx.http, "Pong!").await {
                 println!("Error sending message: {:?}", failure);
             }
         } else if &body == "!messageme" {
-            let dm = 
-                msg.author.dm(&ctx, |m| m.content("Hello!")).await;
+            let dm = msg.author.dm(&ctx, |m| m.content("Hello!")).await;
 
             if let Err(why) = dm {
                 println!("Error when direct messaging user: {:?}", why);
@@ -49,7 +54,7 @@ impl EventHandler for Handler {
                     println!("Error getting channel: {:?}", why);
 
                     return;
-                },
+                }
             };
 
             let response = MessageBuilder::new()
@@ -76,7 +81,7 @@ impl EventHandler for Handler {
 }
 
 #[help]
-#[individual_command_tip = "Hello"]
+// #[individual_command_tip = "Hello"]
 #[command_not_found_text = "Could not find: `{}`."]
 #[max_levenshtein_distance(3)] // how similar the strings have to be
 #[indention_prefix = "+"]
@@ -97,10 +102,15 @@ pub async fn my_help(
 
 #[hook]
 pub async fn before(ctx: &Context, msg: &Message, command_name: &str) -> bool {
-    println!("Got command '{}' by the user '{}'", command_name, msg.author.name);
+    println!(
+        "Got command '{}' by the user '{}'",
+        command_name, msg.author.name
+    );
 
     let mut data = ctx.data.write().await;
-    let counter = data.get_mut::<CommandCounter>().expect("Expected CommandCounter in TypeMap.");
+    let counter = data
+        .get_mut::<CommandCounter>()
+        .expect("Expected CommandCounter in TypeMap.");
     let entry = counter.entry(command_name.to_string()).or_insert(0);
     *entry += 1;
 
@@ -108,11 +118,16 @@ pub async fn before(ctx: &Context, msg: &Message, command_name: &str) -> bool {
 }
 
 #[hook]
-pub async fn after(_ctx: &Context, _msg: &Message, command_name: &str, command_result: CommandResult) {
+pub async fn after(
+    _ctx: &Context,
+    _msg: &Message,
+    command_name: &str,
+    command_result: CommandResult,
+) {
     match command_result {
         Ok(()) => println!("Processed command '{}'", command_name),
         Err(why) => println!("Command '{}' return an error: {:?}", command_name, why),
-        }
+    }
 }
 
 #[hook]
@@ -131,17 +146,22 @@ pub async fn delay_action(ctx: &Context, msg: &Message) {
 }
 
 #[hook]
-pub async fn dispatch_error(ctx: &Context, msg: &Message, error: DispatchError, _command_name: &str) {
+pub async fn dispatch_error(
+    ctx: &Context,
+    msg: &Message,
+    error: DispatchError,
+    _command_name: &str,
+) {
     if let DispatchError::Ratelimited(info) = error {
         // We notify them only once.
         if info.is_first_try {
             let _ = msg
                 .channel_id
-                .say(&ctx.http, &format!("Try this again in {} seconds.", info.as_secs()))
+                .say(
+                    &ctx.http,
+                    &format!("Try this again in {} seconds.", info.as_secs()),
+                )
                 .await;
         }
     }
 }
-
-
-

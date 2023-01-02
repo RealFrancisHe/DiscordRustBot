@@ -1,7 +1,8 @@
-use serenity::{framework::standard::{macros::command, CommandResult, buckets::RevertBucket, Args}, prelude::Context, model::prelude::Message};
-
-
-
+use serenity::{
+    framework::standard::{buckets::RevertBucket, macros::command, Args, CommandResult},
+    model::prelude::Message,
+    prelude::Context,
+};
 
 #[command]
 #[aliases("kitten")]
